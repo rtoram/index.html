@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Desenho à Mão com Caneta Azul</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        canvas {
+            border: 1px solid #000;
+            margin-top: 20px;
+            max-width: 100%;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #upload {
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Transforme sua Imagem em Desenho à Mão</h1>
+    <input type="file" id="upload" accept="image/*">
+    <br>
+    <canvas id="canvas"></canvas>
+    <br>
+    <button onclick="applyEffect()">Aplicar Efeito</button>
+    <button onclick="downloadImage()">Baixar Imagem</button>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let originalImage = new Image();
+
+        // Função para carregar a imagem
+        document.getElementById('upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                originalImage.src = event.target.result;
+                originalImage.onload = function() {
+                    canvas.width = originalImage.width;
+                    canvas.height = originalImage.height;
+                    ctx.drawImage(originalImage, 0, 0);
+                };
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // Função para aplicar o efeito de desenho à mão com caneta azul
+        function applyEffect() {
+            if (!originalImage.src) {
+                alert("Por favor, carregue uma imagem primeiro!");
+                return;
+            }
+
+            // Redesenha a imagem original
+            ctx.drawImage(originalImage, 0, 0);
+
+            // Pegar os dados da imagem
+            let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            let data = imageData.data;
+
+            // Converter para escala de cinza e simular traços
+            for (let i = 0; i < data.length; i += 4) {
+                let r = data[i];
+                let g = data[i + 1];
+                let b = data[i + 2];
+                // Calcula a luminosidade (escala de cinza)
+                let gray = 0.3 * r + 0.59 * g + 0.11 * b;
+                // Define o tom azul para áreas mais escuras
+                if (gray < 128) { // Ajuste o limiar conforme necessário
+                    data[i] = 0;        // Vermelho
+                    data[i + 1] = 0;    // Verde
+                    data[i + 2] = 255;  // Azul (caneta azul)
+                } else {
+                    data[i] = 255;      // Branco nas áreas claras
+                    data[i + 1] = 255;
+                    data[i + 2] = 255;
+                }
+                data[i + 3] = 255; // Mantém opacidade total
+            }
+
+            // Aplica os dados alterados de volta ao canvas
+            ctx.putImageData(imageData, 0, 0);
+
+            // Adiciona um leve borrão para simular traços à mão
+            ctx.filter = 'blur(1px)';
+            ctx.drawImage(canvas, 0, 0);
+            ctx.filter = 'none'; // Reseta o filtro
+        }
+
+        // Função para baixar a imagem
+        function downloadImage() {
+            if (!canvas.width || !canvas.height) {
+                alert("Nenhuma imagem para baixar!");
+                return;
+            }
+            const link = document.createElement('a');
+            link.download = 'desenho_a_mao.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+    </script>
+</body>
+</html>
