@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Desenho à Mão com Caneta Azul</title>
+    <title>Desenho à Mão com Paleta de Cores</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -30,6 +30,11 @@
         #upload {
             margin: 10px;
         }
+        select {
+            padding: 10px;
+            margin: 5px;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
@@ -38,15 +43,22 @@
     <br>
     <canvas id="canvas"></canvas>
     <br>
+    <select id="colorMode">
+        <option value="pencil">Lápis (Tons de Cinza)</option>
+        <option value="bluePen">Caneta Azul</option>
+        <option value="blackPen">Caneta Preta</option>
+    </select>
+    <br>
     <button onclick="applyEffect()">Aplicar Efeito</button>
     <button onclick="downloadImage()">Baixar Imagem</button>
+    <button onclick="clearCanvas()">Deletar</button>
 
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         let originalImage = new Image();
 
-        // Função para carregar a imagem
+        // Carregar a imagem
         document.getElementById('upload').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -62,7 +74,7 @@
             reader.readAsDataURL(file);
         });
 
-        // Função para aplicar o efeito de desenho à mão com caneta azul
+        // Função para aplicar o efeito de desenho à mão
         function applyEffect() {
             if (!originalImage.src) {
                 alert("Por favor, carregue uma imagem primeiro!");
@@ -71,38 +83,60 @@
 
             // Redesenha a imagem original
             ctx.drawImage(originalImage, 0, 0);
-
-            // Pegar os dados da imagem
             let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             let data = imageData.data;
 
-            // Converter para escala de cinza e simular traços
+            // Converte para escala de cinza
+            let grayData = new Uint8ClampedArray(data.length / 4);
             for (let i = 0; i < data.length; i += 4) {
                 let r = data[i];
                 let g = data[i + 1];
                 let b = data[i + 2];
-                // Calcula a luminosidade (escala de cinza)
-                let gray = 0.3 * r + 0.59 * g + 0.11 * b;
-                // Define o tom azul para áreas mais escuras
-                if (gray < 128) { // Ajuste o limiar conforme necessário
-                    data[i] = 0;        // Vermelho
-                    data[i + 1] = 0;    // Verde
-                    data[i + 2] = 255;  // Azul (caneta azul)
+                grayData[i / 4] = 0.3 * r + 0.59 * g + 0.11 * b;
+            }
+
+            // Detecção de bordas simples (Sobel-like)
+            let edgeData = new Uint8ClampedArray(grayData.length);
+            for (let y = 1; y < canvas.height - 1; y++) {
+                for (let x = 1; x < canvas.width - 1; x++) {
+                    let i = y * canvas.width + x;
+                    let gx = (-grayData[(y - 1) * canvas.width + (x - 1)] + grayData[(y - 1) * canvas.width + (x + 1)]) +
+                             (-2 * grayData[y * canvas.width + (x - 1)] + 2 * grayData[y * canvas.width + (x + 1)]) +
+                             (-grayData[(y + 1) * canvas.width + (x - 1)] + grayData[(y + 1) * canvas.width + (x + 1)]);
+                    let gy = (-grayData[(y - 1) * canvas.width + (x - 1)] - 2 * grayData[(y - 1) * canvas.width + x] - grayData[(y - 1) * canvas.width + (x + 1)]) +
+                             (grayData[(y + 1) * canvas.width + (x - 1)] + 2 * grayData[(y + 1) * canvas.width + x] + grayData[(y + 1) * canvas.width + (x + 1)]);
+                    edgeData[i] = Math.sqrt(gx * gx + gy * gy);
+                }
+            }
+
+            // Aplicar paleta de cores
+            let colorMode = document.getElementById('colorMode').value;
+            for (let i = 0; i < data.length; i += 4) {
+                let edgeValue = edgeData[i / 4];
+                if (edgeValue > 50) { // Limiar para destacar bordas
+                    if (colorMode === 'pencil') {
+                        let gray = 255 - edgeValue;
+                        data[i] = gray;     // Vermelho
+                        data[i + 1] = gray; // Verde
+                        data[i + 2] = gray; // Azul
+                    } else if (colorMode === 'bluePen') {
+                        data[i] = 0;        // Vermelho
+                        data[i + 1] = 0;    // Verde
+                        data[i + 2] = 255;  // Azul
+                    } else if (colorMode === 'blackPen') {
+                        data[i] = 0;        // Vermelho
+                        data[i + 1] = 0;    // Verde
+                        data[i + 2] = 0;    // Azul
+                    }
                 } else {
-                    data[i] = 255;      // Branco nas áreas claras
+                    data[i] = 255;      // Fundo branco
                     data[i + 1] = 255;
                     data[i + 2] = 255;
                 }
-                data[i + 3] = 255; // Mantém opacidade total
+                data[i + 3] = 255; // Opacidade
             }
 
-            // Aplica os dados alterados de volta ao canvas
             ctx.putImageData(imageData, 0, 0);
-
-            // Adiciona um leve borrão para simular traços à mão
-            ctx.filter = 'blur(1px)';
-            ctx.drawImage(canvas, 0, 0);
-            ctx.filter = 'none'; // Reseta o filtro
         }
 
         // Função para baixar a imagem
@@ -115,6 +149,15 @@
             link.download = 'desenho_a_mao.png';
             link.href = canvas.toDataURL('image/png');
             link.click();
+        }
+
+        // Função para limpar o canvas
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            canvas.width = 0;
+            canvas.height = 0;
+            originalImage.src = '';
+            document.getElementById('upload').value = '';
         }
     </script>
 </body>
